@@ -1,0 +1,9 @@
+{
+  "pdfUrls": [
+    "https://www.irs.gov/pub/irs-pdf/fw9.pdf",
+    "https://arxiv.org/pdf/1706.03762"
+  ],
+  "outputMode": "documents",
+  "maxPagesPerDocument": 20,
+  "maxFileSizeMb": 10
+}

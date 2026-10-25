@@ -1,0 +1,13 @@
+{
+  "urls": [
+    "https://apify.com",
+    "https://www.shopify.com",
+    "https://wordpress.org"
+  ],
+  "maxResults": 3,
+  "includeCategories": [],
+  "scanScripts": false,
+  "proxyConfiguration": {
+    "useApifyProxy": false
+  }
+}
