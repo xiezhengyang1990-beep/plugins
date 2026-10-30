@@ -1,0 +1,447 @@
+{
+  "id": "DataLanternTech01",
+  "name": "Website technology batch audit with safe recovery — Data Lantern",
+  "active": false,
+  "nodes": [
+    {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "name": "Manual start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "name": "Configure batch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Default is a fictional, no-network demo. Edit here only when ready.\nreturn [{json:{\n  \"mode\": \"demo\",\n  \"allowPaidRun\": false,\n  \"existingRunId\": \"\",\n  \"urls\": [\n    \"https://shop.example/\",\n    \"https://plain.example/\",\n    \"https://slow.example/\",\n    \"https://blocked.example/\",\n    \"https://missing.example/\"\n  ],\n  \"maxResults\": 5,\n  \"maxTotalChargeUsd\": 0.05\n}}];"
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "name": "Validate options",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\nconst structuredClone=value=>JSON.parse(JSON.stringify(value));\nclass URL {\n constructor(raw){\n  if(typeof raw!=='string'||/[^\\x21-\\x7e]/.test(raw))throw new Error('Use canonical ASCII or punycode URLs with percent-encoded paths');\n  const m=/^(https?):\\/\\/([^/]+)(\\/.*)?$/i.exec(raw);\n  if(!m)throw new Error('Only public HTTP(S) URLs are supported');\n  if(m[2].includes('@'))throw new Error('Remove URL credentials');\n  if(/[?#]/.test(raw))throw new Error('Remove URL query strings and fragments');\n  const a=/^([A-Za-z0-9.-]+)(?::([0-9]+))?$/.exec(m[2]);\n  if(!a)throw new Error('Use a public canonical ASCII hostname and standard port');\n  const host=a[1].toLowerCase(),protocol=m[1].toLowerCase()+':',port=a[2]?Number(a[2]):null;\n  if(!host.includes('.')||host.length>253||/^[0-9.]+$/.test(host)||host.split('.').some(s=>!s||s.length>63||!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(s)))throw new Error('Use a public canonical ASCII hostname, not an IP address');\n  if(port!==null&&port!==(protocol==='https:'?443:80))throw new Error('Only the standard HTTP(S) port is supported');\n  const path=m[3]||'/';\n  if(path.includes('\\\\')||/%(?![0-9a-f]{2})/i.test(path))throw new Error('Use a canonical percent-encoded URL path');\n  if(path.split('/').some(s=>['.','..'].includes(s.replace(/%2e/ig,'.'))))throw new Error('Use a canonical URL without dot path segments');\n  this.protocol=protocol;this.hostname=host;this.username='';this.password='';this.search='';this.hash='';\n  this.href=protocol+'//'+host+path;\n }\n toString(){return this.href;}\n}\n\nconst o=$input.first().json;\nif(o.mode==='demo')return [{json:{mode:'demo'}}];\nif(o.mode!=='live')throw new Error('Choose mode demo or live');\nconst existingRunId=String(o.existingRunId??'').trim();\nif(existingRunId&&!/^[A-Za-z0-9]{17}$/.test(existingRunId))throw new Error('Invalid existing run id');\nif(!existingRunId&&o.allowPaidRun!==true)throw new Error('A new paid run requires allowPaidRun: true. Resume an existing run to avoid another start.');\nif(!Array.isArray(o.urls)||o.urls.length<1||o.urls.length>20)throw new Error('Supply1-20 public HTTP(S) URLs');\nconst urls=[...new Set(o.urls.map(raw=>{\n if(typeof raw!=='string')throw new Error('Use public HTTP(S) URL strings');\n const u=new URL(raw);\n if(!['http:','https:'].includes(u.protocol))throw new Error('Only public HTTP(S) URLs are allowed');\n if(u.username||u.password)throw new Error('Remove URL credentials');\n if(u.search||u.hash)throw new Error('Use canonical URLs without query strings or fragments');\n const h=u.hostname.toLowerCase(),parts=h.split('.').map(Number);\n if(h==='localhost'||h.endsWith('.localhost')||h.endsWith('.local')||h.includes(':')||h==='0.0.0.0'||h.startsWith('127.')||h.startsWith('10.')||h.startsWith('192.168.')||(parts[0]===172&&parts[1]>=16&&parts[1]<=31)||(parts[0]===169&&parts[1]===254))throw new Error('Only public URLs are supported');\n return u.toString();\n}))];\nif(!Number.isSafeInteger(o.maxResults)||o.maxResults<1||o.maxResults>20)throw new Error('maxResults must be1-20');\nif(!Number.isFinite(o.maxTotalChargeUsd)||o.maxTotalChargeUsd<0.005||o.maxTotalChargeUsd>0.05)throw new Error('Set a run budget from0.005 to0.05 USD');\nreturn [{json:{mode:'live',existingRunId,maxTotalChargeUsd:o.maxTotalChargeUsd,actorInput:{urls,maxResults:Math.min(o.maxResults,urls.length),scanScripts:true}}}];\n"
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "name": "Use demo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "condition-Use demo?",
+              "leftValue": "={{ $json.mode }}",
+              "rightValue": "demo",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000005",
+      "name": "Demo results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        -240
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Fictional outcomes only. No source or Apify request.\nreturn [{json:{\n  \"demo\": true,\n  \"input\": {\n    \"urls\": [\n      \"https://shop.example/\",\n      \"https://plain.example/\",\n      \"https://slow.example/\",\n      \"https://blocked.example/\",\n      \"https://missing.example/\"\n    ],\n    \"maxResults\": 5\n  },\n  \"run\": {\n    \"id\": \"FICTIONAL_DEMO_NOT_AN_APIFY_RUN\",\n    \"status\": \"TIMED-OUT\"\n  },\n  \"items\": [\n    {\n      \"url\": \"https://shop.example/\",\n      \"error\": null,\n      \"statusCode\": 200,\n      \"technologyNames\": [\n        \"Shopify\"\n      ],\n      \"analysisWarnings\": []\n    },\n    {\n      \"url\": \"https://plain.example/\",\n      \"error\": null,\n      \"statusCode\": 200,\n      \"technologyNames\": [],\n      \"analysisWarnings\": []\n    },\n    {\n      \"url\": \"https://slow.example/\",\n      \"error\": \"Timed out\",\n      \"statusCode\": null,\n      \"technologyNames\": [],\n      \"analysisWarnings\": []\n    },\n    {\n      \"url\": \"https://blocked.example/\",\n      \"error\": \"HTTP403 forbidden\",\n      \"statusCode\": 403,\n      \"technologyNames\": [],\n      \"analysisWarnings\": []\n    }\n  ]\n}}];"
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000006",
+      "name": "Resume existing?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "condition-Resume existing?",
+              "leftValue": "={{ $json.existingRunId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000007",
+      "name": "Start one Actor run",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        40
+      ],
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/datalantern~tech-stack-detector/runs",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "build",
+              "value": "latest"
+            },
+            {
+              "name": "memory",
+              "value": "2048"
+            },
+            {
+              "name": "timeout",
+              "value": "180"
+            },
+            {
+              "name": "waitForFinish",
+              "value": "60"
+            },
+            {
+              "name": "restartOnError",
+              "value": "false"
+            },
+            {
+              "name": "forcePermissionLevel",
+              "value": "LIMITED_PERMISSIONS"
+            },
+            {
+              "name": "maxTotalChargeUsd",
+              "value": "={{ $json.maxTotalChargeUsd }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.actorInput }}",
+        "options": {
+          "timeout": 90000
+        }
+      },
+      "retryOnFail": false
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000008",
+      "name": "Read existing run",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        240
+      ],
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "GET",
+        "url": "=https://api.apify.com/v2/actor-runs/{{ $json.existingRunId }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "retryOnFail": false
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000009",
+      "name": "Check terminal run",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        100
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\nconst cfg=$('Validate options').first().json;\nconst run=$input.first().json.data??$input.first().json;\nif(!run||run.actId!=='XoFMbZr9A77bML20G')throw new Error('This is a different Actor run; use the technology-detector run and original input');\nif(!/^[A-Za-z0-9]{17}$/.test(run.id??''))throw new Error('Invalid returned run id');\nif(!['SUCCEEDED','FAILED','TIMED-OUT','ABORTED'].includes(run.status))throw new Error('Run '+run.id+' is '+run.status+'. Set existingRunId to '+run.id+' and retain the original URL input before executing again. Do not start another paid run.');\nif(!/^[A-Za-z0-9]{17}$/.test(run.defaultDatasetId??''))throw new Error('Invalid returned dataset id');\nreturn [{json:{run,input:cfg.actorInput}}];\n"
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000010",
+      "name": "Fetch full dataset",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        100
+      ],
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "GET",
+        "url": "=https://api.apify.com/v2/datasets/{{ $json.run.defaultDatasetId }}/items",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "offset",
+              "value": "0"
+            },
+            {
+              "name": "limit",
+              "value": "={{ $json.input.urls.length + 1 }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "retryOnFail": false
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000011",
+      "name": "Prepare batch report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        -40
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\nconst structuredClone=value=>JSON.parse(JSON.stringify(value));\nclass URL {\n constructor(raw){\n  if(typeof raw!=='string'||/[^\\x21-\\x7e]/.test(raw))throw new Error('Use canonical ASCII or punycode URLs with percent-encoded paths');\n  const m=/^(https?):\\/\\/([^/]+)(\\/.*)?$/i.exec(raw);\n  if(!m)throw new Error('Only public HTTP(S) URLs are supported');\n  if(m[2].includes('@'))throw new Error('Remove URL credentials');\n  if(/[?#]/.test(raw))throw new Error('Remove URL query strings and fragments');\n  const a=/^([A-Za-z0-9.-]+)(?::([0-9]+))?$/.exec(m[2]);\n  if(!a)throw new Error('Use a public canonical ASCII hostname and standard port');\n  const host=a[1].toLowerCase(),protocol=m[1].toLowerCase()+':',port=a[2]?Number(a[2]):null;\n  if(!host.includes('.')||host.length>253||/^[0-9.]+$/.test(host)||host.split('.').some(s=>!s||s.length>63||!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(s)))throw new Error('Use a public canonical ASCII hostname, not an IP address');\n  if(port!==null&&port!==(protocol==='https:'?443:80))throw new Error('Only the standard HTTP(S) port is supported');\n  const path=m[3]||'/';\n  if(path.includes('\\\\')||/%(?![0-9a-f]{2})/i.test(path))throw new Error('Use a canonical percent-encoded URL path');\n  if(path.split('/').some(s=>['.','..'].includes(s.replace(/%2e/ig,'.'))))throw new Error('Use a canonical URL without dot path segments');\n  this.protocol=protocol;this.hostname=host;this.username='';this.password='';this.search='';this.hash='';\n  this.href=protocol+'//'+host+path;\n }\n toString(){return this.href;}\n}\nconst TERMINAL = new Set(['SUCCEEDED', 'FAILED', 'ABORTED', 'TIMED-OUT']);\n\nfunction normalizedUrls(value) {\n    const parts = [];\n    const push = (entry) => {\n        if (typeof entry !== 'string') throw new Error('Every input URL must be a string or an object with a URL.');\n        // Match the Actor's URL boundaries without changing a literal comma\n        // inside a path/query/fragment or adding phantom retry targets.\n        for (const line of entry.split(/\\n+|,\\s+(?=https?:\\/\\/)/i)) {\n            const text = line.trim();\n            const address = text.replace(/^https?:\\/\\//i, '');\n            const rootUrlList = /^https?:\\/\\/[^/?#,\\s]+\\/?(?:,\\s*https?:\\/\\/[^/?#,\\s]+\\/?)+$/i.test(text);\n            const entries = rootUrlList || !/[/?#]/.test(address) ? text.split(/,+/) : [text];\n            parts.push(...entries.map((s) => s.trim()).filter(Boolean));\n        }\n    };\n    if (Array.isArray(value)) {\n        for (const entry of value) push(entry && typeof entry === 'object' ? entry.url : entry);\n    } else push(value);\n    return [...new Set(parts.map((value) => {\n        if (/^[a-z][\\w+.-]*:\\/\\//i.test(value) && !/^https?:\\/\\//i.test(value)) throw new Error('Only HTTP(S) URLs are supported.');\n        const url = new URL(/^https?:\\/\\//i.test(value) ? value : `https://${value}`);\n        if (url.username || url.password) throw new Error('Remove credentials from input URLs before making a report.');\n        return url.toString();\n    }))];\n}\n\nfunction classify(row) {\n    if (row.error === null && row.statusCode >= 200 && row.statusCode < 400) return 'successful';\n    const message = row.error ?? '';\n    // Do not propose automatic retries of access-control pages or source rate limits.\n    if ([401, 403, 429].includes(row.statusCode) || /bot.check|captcha|certificate|DNS lookup failed|domain does not exist|ENOTFOUND|forbidden/i.test(message)) return 'needs-review';\n    if ([408, 425, 500, 502, 503, 504].includes(row.statusCode) || /timed? ?out|did not respond within|ECONNRESET|EAI_AGAIN|temporary/i.test(message)) return 'transient-failure';\n    return 'needs-review';\n}\n\nfunction csvCell(value) {\n    let text = value === null || value === undefined ? '' : String(value);\n    if (/^[\\s\\uFEFF]*[=+@-]/u.test(text)) text = `'${text}`;\n    return `\"${text.replaceAll('\"', '\"\"')}\"`;\n}\n\nfunction prepareBatch(input, items, metadata) {\n    if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Use the original Actor input JSON object.');\n    const urls = normalizedUrls(input.urls);\n    if (!urls.length) throw new Error('The original input must contain at least one URL.');\n    if (!Array.isArray(items)) throw new Error('Use a complete JSON array export of the default dataset.');\n    const run = metadata?.data ?? metadata;\n    if (!run || typeof run.id !== 'string' || !run.id.trim()) throw new Error('The saved run id is required.');\n    if (!TERMINAL.has(run.status)) throw new Error('Finish the existing run first: retry preparation requires a terminal run status.');\n    const requested = new Set(urls);\n    const byUrl = new Map();\n    for (const row of items) {\n        if (!row || typeof row.url !== 'string' || !Object.hasOwn(row, 'error') || !(row.error === null || typeof row.error === 'string')) throw new Error('The error field is missing or invalid; use the complete JSON export, not a selected-field export.');\n        if (!Object.hasOwn(row, 'statusCode') || !(row.statusCode === null || (Number.isInteger(row.statusCode) && row.statusCode >= 100 && row.statusCode <= 599)) || (row.statusCode === null && row.error === null)) throw new Error('Invalid statusCode: a missing HTTP status needs an explicit error.');\n        const normalized = normalizedUrls([row.url])[0];\n        if (!requested.has(normalized)) throw new Error('A dataset URL was not requested in the original input; check the run and export.');\n        if (byUrl.has(normalized)) throw new Error('Duplicate dataset URL; verify the complete export before preparing any retry.');\n        byUrl.set(normalized, { ...row, url: normalized, classification: classify(row) });\n    }\n    const rows = urls.filter((url) => byUrl.has(url)).map((url) => byUrl.get(url));\n    const transient = rows.filter((r) => r.classification === 'transient-failure').map((r) => r.url);\n    const unobservedUrls = urls.filter((url) => !byUrl.has(url));\n    const warnings = [\n        'This report does not contact Apify or any target website and never starts a run.',\n        'Retry candidates require review. A new paid run has its own charges; there is no cross-run billing deduplication.',\n        'A terminal run status does not prove that this export includes every dataset item. Download the complete JSON export without filters or limits.',\n    ];\n    if (unobservedUrls.length) warnings.push('An unobserved URL is not proof that it was never processed: an export limit, a run or charge cap, an abort, or another interruption may explain it. Inspect the original run before resubmitting it.');\n    const retryCandidatesInput = transient.length ? { ...structuredClone(input), urls: transient, maxResults: transient.length } : null;\n    const columns = ['url', 'classification', 'statusCode', 'error', 'technologyNames', 'analysisWarnings'];\n    const csv = [columns.map(csvCell).join(','), ...rows.map((row) => [row.url, row.classification, row.statusCode, row.error, (row.technologyNames ?? []).join('; '), (row.analysisWarnings ?? []).join('; ')].map(csvCell).join(','))].join('\\r\\n') + '\\r\\n';\n    return {\n        run: { id: run.id, status: run.status },\n        summary: {\n            requested: urls.length,\n            observed: rows.length,\n            successful: rows.filter((r) => r.classification === 'successful').length,\n            transientFailures: transient.length,\n            needsReview: rows.filter((r) => r.classification === 'needs-review').length,\n            unobserved: unobservedUrls.length,\n        },\n        rows, unobservedUrls, retryCandidatesInput, warnings, csv,\n    };\n}\n\nconst incoming=$input.first().json;\nconst context=incoming.demo===true?incoming:$('Check terminal run').first().json;\nconst items=incoming.demo===true?incoming.items:incoming.body;\nif(!Array.isArray(items))throw new Error('Expected the complete dataset array in the HTTP response body');\nif(items.length>context.input.urls.length)throw new Error('Dataset contains more rows than requested; verify this run/export');\nconst report=prepareBatch(context.input,items,context.run);\nreport.demo=incoming.demo===true;\nif(report.demo)report.warnings.unshift('FICTIONAL DEMO: not website observations, customer use or income.');\nreturn [{json:report}];\n"
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000012",
+      "name": "Download audit CSV",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        -40
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\nconst report=$input.first().json;\nif(typeof report.csv!=='string')throw new Error('Missing audit CSV');\nconst {csv,...data}=report;\nreturn [{json:data,binary:{data:{data:Buffer.from(csv,'utf8').toString('base64'),mimeType:'text/csv',fileName:(report.demo?'demo-':'')+'technology-audit.csv'}}}];\n"
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000013",
+      "name": "Before using live mode",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -640
+      ],
+      "parameters": {
+        "content": "## Safe first use\nExecute the default fictional demo first: no HTTP calls and no credential needed.\n\nFor live mode, choose your own Header Auth credential (Authorization: Bearer <your Apify token>) on all 3 HTTP nodes. Replace the URLs; set mode to live and allowPaidRun to true only if you approve the configured run budget. Current Actor prices remain unchanged.\n\nTo retrieve a previous run, set existingRunId and retain its original URLs; this takes the GET path, not a new paid start. If a start response is lost, inspect Apify Runs before retrying. There is no automatic restart, polling, resubmission or cross-run charge deduplication.\n\nOutput: successes, temporary failures, manual-review failures, unobserved URLs and a formula-safe CSV. Retry candidates are suggestions only; never bypass source restrictions.\n\nActor: https://apify.com/datalantern/tech-stack-detector",
+        "height": 600,
+        "width": 560
+      }
+    }
+  ],
+  "connections": {
+    "Manual start": {
+      "main": [
+        [
+          {
+            "node": "Configure batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configure batch": {
+      "main": [
+        [
+          {
+            "node": "Validate options",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate options": {
+      "main": [
+        [
+          {
+            "node": "Use demo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use demo?": {
+      "main": [
+        [
+          {
+            "node": "Demo results",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resume existing?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resume existing?": {
+      "main": [
+        [
+          {
+            "node": "Start one Actor run",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read existing run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start one Actor run": {
+      "main": [
+        [
+          {
+            "node": "Check terminal run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read existing run": {
+      "main": [
+        [
+          {
+            "node": "Check terminal run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check terminal run": {
+      "main": [
+        [
+          {
+            "node": "Fetch full dataset",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Demo results": {
+      "main": [
+        [
+          {
+            "node": "Prepare batch report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch full dataset": {
+      "main": [
+        [
+          {
+            "node": "Prepare batch report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare batch report": {
+      "main": [
+        [
+          {
+            "node": "Download audit CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 180
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
